@@ -3,8 +3,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <time.h>
-#include <sys/times.h>
 
 void error(char *msg) {
     perror(msg);
@@ -60,9 +58,6 @@ int main(int argc, char *argv[]) {
     int cantidadNumeros;
     long long totalFinal;
     int numProcesos;
-    struct timespec start, end;
-    struct tms tms_start, tms_end;
-    clock_t clock_start, clock_end;
 
     if (argc < 2) {
         printf("Uso: %s <numero_de_procesos>\n", argv[0]);
@@ -82,10 +77,6 @@ int main(int argc, char *argv[]) {
         numProcesos = cantidadNumeros;
         printf("Número de procesos ajustado a la cantidad de números: %d\n", numProcesos);
     }
-
-    // Medir tiempo inicio
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    clock_start = times(&tms_start);
 
     // Preparar límites y procesos
     int **limites = malloc(numProcesos * sizeof(int*));
@@ -138,17 +129,8 @@ int main(int argc, char *argv[]) {
 
     totalFinal = leerTotal(numProcesos);
 
-    // Medir tiempo fin
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    clock_end = times(&tms_end);
-
-    double wall_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-    double cpu_time = ((tms_end.tms_utime + tms_end.tms_stime) - (tms_start.tms_utime + tms_start.tms_stime)) / (double) sysconf(_SC_CLK_TCK);
-
     printf("\n====================================\n");
     printf("Resultado Final: La suma total es %lld\n", totalFinal);
-    printf("Wall time (segundos): %.6f\n", wall_time);
-    printf("CPU time (segundos): %.6f\n", cpu_time);
     printf("====================================\n");
 
     for (int j = 0; j < numProcesos; j++) free(limites[j]);
