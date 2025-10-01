@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
 
 void error(char *msg) {
     perror(msg);
@@ -52,25 +53,32 @@ long long leerTotal(int n) {
     return total;
 }
 
+double tiempoTranscurrido(struct timespec start, struct timespec end) {
+    return (end.tv_sec - start.tv_sec) + 
+           (end.tv_nsec - start.tv_nsec) / 1e9;
+}
 
 int main(int argc, char *argv[]) {
     int *vector;
     int cantidadNumeros;
     long long totalFinal;
     int numProcesos;
+    char *archivoEntrada;
 
-    if (argc < 2) {
-        printf("Uso: %s <numero_de_procesos>\n", argv[0]);
+    if (argc < 3) {
+        printf("Uso: %s <numero_de_procesos> <archivo_entrada>\n", argv[0]);
         return 1;
     }
 
     numProcesos = atoi(argv[1]);
+    archivoEntrada = argv[2];
+
     if (numProcesos <= 0) {
         printf("Número de procesos inválido. Usando 2 procesos por defecto.\n");
         numProcesos = 2;
     }
 
-    cantidadNumeros = leerNumeros("input.txt", &vector);
+    cantidadNumeros = leerNumeros(archivoEntrada, &vector);
     printf("Padre [%d]: Total de números leídos: %d\n", getpid(), cantidadNumeros);
 
     if (numProcesos > cantidadNumeros) {
@@ -78,7 +86,7 @@ int main(int argc, char *argv[]) {
         printf("Número de procesos ajustado a la cantidad de números: %d\n", numProcesos);
     }
 
-    // Preparar límites y procesos
+    // Dividir trabajo
     int **limites = malloc(numProcesos * sizeof(int*));
     for (int j = 0; j < numProcesos; j++) {
         limites[j] = malloc(2 * sizeof(int));
@@ -97,14 +105,14 @@ int main(int argc, char *argv[]) {
 
     remove("out.txt");
 
-    for (int j = 0; j < numProcesos; j++) {
-        printf("Padre [%d]: Hijo %d sumará del índice %d al %d\n", getpid(), j+1, limites[j][0], limites[j][1]-1);
-    }
+    // Medir tiempo
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
+    // Crear hijos
     for (int j = 0; j < numProcesos; j++) {
         pids[j] = fork();
         if (pids[j] == 0) {
-            printf("Hijo %d [%d]: Iniciando suma.\n", j+1, getpid());
             long long suma = 0;
             for (int k = limites[j][0]; k < limites[j][1]; k++) {
                 suma += vector[k];
@@ -115,7 +123,6 @@ int main(int argc, char *argv[]) {
             }
             fprintf(outfile, "%lld\n", suma);
             fclose(outfile);
-            printf("Hijo %d [%d]: Suma parcial %lld escrita en out.txt.\n", j+1, getpid(), suma);
             exit(0);
         } else if (pids[j] < 0) {
             error("Error en fork");
@@ -125,12 +132,14 @@ int main(int argc, char *argv[]) {
     for (int j = 0; j < numProcesos; j++) {
         wait(NULL);
     }
-    printf("Padre [%d]: Todos los hijos han terminado.\n", getpid());
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
 
     totalFinal = leerTotal(numProcesos);
 
     printf("\n====================================\n");
     printf("Resultado Final: La suma total es %lld\n", totalFinal);
+    printf("Tiempo Wall: %.6f segundos\n", tiempoTranscurrido(start, end));
     printf("====================================\n");
 
     for (int j = 0; j < numProcesos; j++) free(limites[j]);
